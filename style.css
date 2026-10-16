@@ -36,15 +36,13 @@ img,svg{display:block}
 .curtain{position:fixed;inset:0;z-index:150;background:var(--wood);transform:scaleY(0);transform-origin:bottom;pointer-events:none;display:grid;place-items:center}
 .curtain span{font-family:var(--display);font-weight:900;font-size:clamp(3rem,10vw,7rem);color:var(--bg);opacity:0}
 
-/* cursor */
-.cursor,.cursor-ring,.cursor-label{position:fixed;top:0;left:0;pointer-events:none;z-index:120;display:none}
-.cursor{width:6px;height:6px;border-radius:50%;background:var(--wood);transform:translate(-50%,-50%)}
-.cursor-ring{width:38px;height:38px;border-radius:50%;border:1px solid rgba(227,154,92,.55);transform:translate(-50%,-50%);transition:width .3s var(--ease),height .3s var(--ease),background .3s,border-color .3s}
-.cursor-ring.hover{width:70px;height:70px;background:rgba(227,154,92,.08)}
-.cursor-ring.view{width:96px;height:96px;background:var(--wood);border-color:var(--wood)}
-.cursor-label{font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;color:var(--bg);transform:translate(-50%,-50%);opacity:0;transition:opacity .2s}
+/* code flow background + hover label */
+#codeflow{position:fixed;inset:0;z-index:0;pointer-events:none}
+body>main,body>footer{position:relative;z-index:1}
+#sawdust,.cursor,.cursor-ring{display:none!important}
+.cursor-label{position:fixed;top:0;left:0;pointer-events:none;z-index:120;display:none;font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;color:var(--bg);background:var(--wood);padding:6px 12px;border-radius:99px;opacity:0;transition:opacity .2s}
 .cursor-label.on{opacity:1}
-@media (pointer:fine){.cursor,.cursor-ring,.cursor-label{display:block}}
+@media (pointer:fine){.cursor-label{display:block}}
 
 /* progress + header */
 .progress{position:fixed;top:0;left:0;height:2px;width:100%;background:linear-gradient(90deg,var(--wood2),var(--gold));transform-origin:0 50%;transform:scaleX(0);z-index:70}

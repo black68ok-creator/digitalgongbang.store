@@ -57,70 +57,119 @@
     t(); setInterval(t, 15000);
   }
 
-  /* ---------- sawdust particles ---------- */
-  const cv = $('#sawdust');
-  if (cv) {
-    const ctx = cv.getContext('2d');
-    let W, H, parts = [], mouse = { x: -999, y: -999 }, visible = true;
+  /* ---------- code flow field (water-like) + code trail ---------- */
+  const flow = document.createElement('canvas');
+  flow.id = 'codeflow'; flow.setAttribute('aria-hidden', 'true');
+  document.body.prepend(flow);
+  {
+    const ctx = flow.getContext('2d');
     const dpr = Math.min(devicePixelRatio || 1, 2);
-    const resize = () => { W = cv.clientWidth; H = cv.clientHeight; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); };
+    const small = innerWidth < 760;
+    const CELL = small ? 18 : 16;
+    const GLYPHS = '01{}[]()<>/=;:+-*_.#$&|!?~木手秀AIconstletfnasyncawaitreturn=>'.split('');
+    const WORDS = ['const', 'AI', '=>', '{ }', 'await', '木手', 'fn()', '</>', 'build', '秀', 'mockup', 'ship'];
+    let W, H, cols, rows, grid, t = 0, last = 0, hidden = false;
+    const mouse = { x: -9999, y: -9999, px: -9999, py: -9999, vx: 0, vy: 0, on: false };
+    const ripples = [], trail = [];
+    const rnd = a => a[Math.random() * a.length | 0];
+    const resize = () => {
+      W = innerWidth; H = innerHeight;
+      flow.width = W * dpr; flow.height = H * dpr; flow.style.width = W + 'px'; flow.style.height = H + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cols = Math.ceil(W / CELL) + 2; rows = Math.ceil(H / CELL) + 2;
+      grid = Array.from({ length: cols * rows }, () => ({ c: rnd(GLYPHS), k: Math.random() }));
+    };
     resize(); addEventListener('resize', resize);
-    const C = ['227,154,92', '242,196,109', '180,101,47', '243,235,222'];
-    const spawn = (x, y, burst) => ({
-      x: x ?? Math.random() * W, y: y ?? Math.random() * H,
-      vx: (Math.random() - .5) * (burst ? 2.4 : .3), vy: burst ? (Math.random() - .8) * 2.2 : Math.random() * .35 + .05,
-      r: Math.random() * 2 + .6, w: Math.random() * 4 + 1, rot: Math.random() * Math.PI, vr: (Math.random() - .5) * .05,
-      a: burst ? 1 : Math.random() * .5 + .15, life: burst ? 90 : Infinity, c: C[Math.random() * C.length | 0]
-    });
-    const base = innerWidth < 700 ? 45 : 120;
-    for (let i = 0; i < base; i++) parts.push(spawn());
-    const host = cv.parentElement;
-    host.addEventListener('pointermove', e => {
-      const r = cv.getBoundingClientRect(); mouse.x = e.clientX - r.left; mouse.y = e.clientY - r.top;
-      if (!reduce && parts.length < base + 220) for (let i = 0; i < 2; i++) parts.push(spawn(mouse.x, mouse.y, true));
-    });
-    host.addEventListener('pointerleave', () => { mouse.x = mouse.y = -999; });
-    new IntersectionObserver(([e]) => visible = e.isIntersecting).observe(cv);
-    const tick = () => {
-      if (visible) {
+    document.addEventListener('visibilitychange', () => hidden = document.hidden);
+
+    addEventListener('pointermove', e => {
+      if (e.pointerType === 'touch' && !e.isPrimary) return;
+      mouse.on = true;
+      mouse.vx = e.clientX - (mouse.x < -999 ? e.clientX : mouse.x);
+      mouse.vy = e.clientY - (mouse.y < -999 ? e.clientY : mouse.y);
+      mouse.x = e.clientX; mouse.y = e.clientY;
+      const sp = Math.hypot(mouse.vx, mouse.vy);
+      const n = Math.min(4, 1 + sp / 14 | 0);
+      for (let i = 0; i < n && !reduce; i++) {
+        trail.push({ x: mouse.x - mouse.vx * i / n, y: mouse.y - mouse.vy * i / n,
+          vx: mouse.vx * .08 + (Math.random() - .5) * .8, vy: mouse.vy * .08 + (Math.random() - .5) * .8 + .25,
+          c: Math.random() < .12 ? rnd(WORDS) : rnd(GLYPHS), life: 1, s: 11 + Math.random() * 5 });
+      }
+      if (trail.length > 260) trail.splice(0, trail.length - 260);
+      if (sp > 18 && (!ripples.length || t - ripples[ripples.length - 1].t > .12)) ripples.push({ x: mouse.x, y: mouse.y, t, a: Math.min(1, sp / 60) });
+    }, { passive: true });
+    addEventListener('pointerdown', e => ripples.push({ x: e.clientX, y: e.clientY, t, a: 1.4 }));
+    document.addEventListener('pointerleave', () => { mouse.on = false; mouse.x = mouse.y = -9999; });
+
+    const draw = now => {
+      const dt = Math.min(.05, (now - last) / 1000 || .016); last = now;
+      if (!hidden) {
+        t += dt;
         ctx.clearRect(0, 0, W, H);
-        parts = parts.filter(p => p.life > 0);
-        for (const p of parts) {
-          const dx = p.x - mouse.x, dy = p.y - mouse.y, d2 = dx * dx + dy * dy;
-          if (d2 < 14000 && p.life === Infinity) { const f = 1 - d2 / 14000; p.vx += dx * .0009 * f; p.vy += dy * .0009 * f; }
-          p.vy += p.life === Infinity ? .0015 : .05; p.vx *= .985; p.vy *= .985;
-          if (p.life === Infinity) p.vy = Math.min(Math.max(p.vy, .04), .8);
-          p.x += p.vx; p.y += p.vy; p.rot += p.vr;
-          if (p.life !== Infinity) { p.life--; p.a = p.life / 90; }
-          if (p.y > H + 10) { p.y = -10; p.x = Math.random() * W; }
-          if (p.x < -10) p.x = W + 10; if (p.x > W + 10) p.x = -10;
-          ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
-          ctx.fillStyle = `rgba(${p.c},${p.a})`; ctx.fillRect(-p.w / 2, -p.r / 2, p.w, p.r); ctx.restore();
+        ctx.font = `${CELL - 4}px "IBM Plex Mono", monospace`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        // current: the whole field drifts down-right like water, with scroll adding push
+        const sy = scrollY * .15;
+        const ox = (t * 10) % CELL, oy = (t * 22 + sy) % CELL;
+        const shiftC = Math.floor(t * 10 / CELL), shiftR = Math.floor((t * 22 + sy) / CELL);
+        for (let r = -1; r < rows - 1; r++) {
+          for (let c = -1; c < cols - 1; c++) {
+            const gx = c * CELL + ox, gy = r * CELL + oy;
+            // flowing wave field
+            let v = Math.sin(gx * .012 + t * .9) + Math.sin(gy * .017 - t * 1.2) + Math.sin((gx + gy) * .008 + t * .6) + Math.sin(Math.hypot(gx - W * .7, gy - H * .3) * .015 - t * 1.5) * .7;
+            v = (v + 3.7) / 7.4; // 0..1
+            // ripples
+            let rip = 0, dx = 0, dy = 0;
+            for (let i = 0; i < ripples.length; i++) {
+              const p = ripples[i], age = t - p.t, d = Math.hypot(gx - p.x, gy - p.y), front = age * 260;
+              const band = Math.exp(-((d - front) ** 2) / 900) * Math.exp(-age * 1.6) * p.a;
+              rip += band; if (d > 0) { dx += (gx - p.x) / d * band * 6; dy += (gy - p.y) / d * band * 6; }
+            }
+            // mouse glow
+            let glow = 0;
+            if (mouse.on) { const d = Math.hypot(gx - mouse.x, gy - mouse.y); glow = Math.max(0, 1 - d / 170); glow *= glow; }
+            const b = Math.pow(v, 3) * .5 + rip * .9 + glow * .9;
+            if (b < .06) continue;
+            const idx = (((r - shiftR) % rows + rows) % rows) * cols + (((c - shiftC) % cols + cols) % cols);
+            const cell = grid[idx];
+            if (Math.random() < .002 + glow * .05 + rip * .08) cell.c = rnd(GLYPHS);
+            const a = Math.min(.85, b * (.35 + cell.k * .25));
+            const hot = glow + rip;
+            ctx.fillStyle = hot > .35 ? `rgba(242,196,109,${a})` : `rgba(227,154,92,${a * .75})`;
+            ctx.fillText(cell.c, gx + dx + (glow ? (gx - mouse.x) * glow * .12 : 0), gy + dy + (glow ? (gy - mouse.y) * glow * .12 : 0));
+          }
+        }
+        while (ripples.length && t - ripples[0].t > 2.5) ripples.shift();
+        // code trail flowing off the pointer
+        for (let i = trail.length - 1; i >= 0; i--) {
+          const p = trail[i];
+          p.vx *= .96; p.vy = p.vy * .96 + .05;
+          p.vx += Math.sin(p.y * .03 + t * 3) * .05;
+          p.x += p.vx; p.y += p.vy; p.life -= dt * .9;
+          if (p.life <= 0) { trail.splice(i, 1); continue; }
+          ctx.font = `${p.s}px "IBM Plex Mono", monospace`;
+          ctx.fillStyle = `rgba(243,235,222,${p.life * .9})`;
+          ctx.fillText(p.c, p.x, p.y);
         }
       }
-      if (!reduce) requestAnimationFrame(tick);
+      if (!reduce) requestAnimationFrame(draw);
     };
-    tick();
+    requestAnimationFrame(draw);
   }
 
-  /* ---------- cursor ---------- */
+  /* ---------- hover label (VIEW / READ / PLAY) ---------- */
   if (fine && !reduce) {
-    const dot = $('.cursor'), ring = $('.cursor-ring'), label = $('.cursor-label');
-    let mx = innerWidth / 2, my = innerHeight / 2, rx = mx, ry = my;
-    addEventListener('pointermove', e => { mx = e.clientX; my = e.clientY; dot.style.transform = `translate(${mx}px,${my}px) translate(-50%,-50%)`; });
+    const label = $('.cursor-label');
+    let mx = 0, my = 0, lx = 0, ly = 0;
+    addEventListener('pointermove', e => { mx = e.clientX; my = e.clientY; });
     (function loop() {
-      rx += (mx - rx) * .16; ry += (my - ry) * .16;
-      ring.style.transform = `translate(${rx}px,${ry}px) translate(-50%,-50%)`;
-      label.style.transform = `translate(${rx}px,${ry}px) translate(-50%,-50%)`;
+      lx += (mx - lx) * .2; ly += (my - ly) * .2;
+      if (label) label.style.transform = `translate(${lx + 18}px,${ly + 18}px)`;
       requestAnimationFrame(loop);
     })();
-    $$('a,button').forEach(el => {
-      el.addEventListener('pointerenter', () => ring.classList.add('hover'));
-      el.addEventListener('pointerleave', () => ring.classList.remove('hover'));
-    });
     $$('[data-cursor]').forEach(el => {
-      el.addEventListener('pointerenter', () => { ring.classList.add('view'); label.textContent = el.dataset.cursor; label.classList.add('on'); });
-      el.addEventListener('pointerleave', () => { ring.classList.remove('view'); label.classList.remove('on'); });
+      el.addEventListener('pointerenter', () => { label.textContent = el.dataset.cursor; label.classList.add('on'); });
+      el.addEventListener('pointerleave', () => label.classList.remove('on'));
     });
     /* magnetic */
     $$('.magnetic').forEach(b => {
